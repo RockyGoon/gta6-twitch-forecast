@@ -28,11 +28,17 @@ So the program:
    launches whose unlock rolls the same way. If that pool is thinner than 3,
    it falls back to every usable comparable; if none is usable, to the house
    persistence baseline.
-3. For each hour 2–24, takes the pool's **median log-ratio** to hour 1,
-   shrunk 10% toward persistence, and a **spread** from the pool's
-   disagreement that hour (population std of the log-ratios, widened ×1.2,
-   floor 0.12 log units).
-4. Forecasts `q_tau = hour1 × exp(median_log_ratio) × exp(z_tau × spread)`,
+3. For each hour 2–24, regresses the pool's **log-ratios** to hour 1 on
+   **log hour 1** (one predictor, ordinary least squares) and reads the
+   fitted value off at this case's hour 1 — because the bigger hour 1
+   already is, the flatter the day runs (peak-hour correlation about −0.8
+   across the pool; the biggest launches on record peak at only 1.0–1.3×
+   their hour 1, while the pool median says 2.23×). The fitted log-ratio
+   is shrunk 5% toward persistence.
+4. Takes the **spread** from the regression's residual disagreement that
+   hour (population std of the residuals, widened ×1.4, floor 0.20 log
+   units) and forecasts
+   `q_tau = hour1 × exp(fitted_log_ratio) × exp(z_tau × spread)`,
    rounded to 2 decimals, clamped to [1, 1e9] and non-decreasing.
 
 The ratios and spread are computed at run time from the case file itself,
@@ -43,11 +49,25 @@ console-only, rolling midnight), which are the closest analogues to GTA VI.
 ## Validation
 
 Leave-one-out cross-validation on the console-only comparables (predict each
-launch's hours 2–24 from the rest of the pool): **mean pinball loss ~0.22**,
-against ~0.32 for the house persistence baseline on the same launches. The
-spread widening (×1.2) and the 10% shrinkage were chosen on that
-cross-validation; the loss is flat across the nearby settings (0.216–0.220),
-so the model is not tuned to a knife edge.
+launch's hours 2–24 from the rest of the pool): **mean pinball loss ~0.17**,
+against ~0.22 for the plain-median version of this model and ~0.32 for the
+house persistence baseline on the same launches. The gain is concentrated
+at the size extremes the regression corrects — the smallest launch (Saros,
+0.42 → 0.19) and the largest (The Last of Us Part II, 0.29 → 0.18) — and
+the size slope is confirmed on the wider set of launches with hour 1 above
+5,000 viewers (29 launches: the regression cuts that pool's LOOCV loss from
+0.31 to 0.26). On the LOOCV the forecast's 90% band covers 88% of hours
+with a typical median miss of ~32% (plain-median version: 41%). The
+regression slope, widening (×1.4) and floor (0.20) were chosen on that
+cross-validation; the loss is flat across the nearby settings (0.174–0.176),
+so the model is not tuned to a knife edge. Alternatives tried and rejected
+on the same LOOCV: mean/trimmed-mean/midhinge centres (0.210–0.212),
+smoothing the ratio curve across hours (0.215), empirical pool quantiles
+instead of normal z-scores (0.227), recency weighting (0.216–0.233),
+asymmetric upper/lower spreads (0.214 alone, 0.189 with the regression),
+smoothing the regression slope across hours (0.234), and blending the
+regression with the median centre (0.185 at 50/50 — the full regression
+wins at 0.174).
 
 ## Run it
 
